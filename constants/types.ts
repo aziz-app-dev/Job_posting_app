@@ -62,6 +62,8 @@ export interface Post {
 
   createdAt: Date;
   updatedAt: Date;
+
+  scheduledAt?: Date | null;
 }
 
 export interface CreatePostInput {
@@ -86,6 +88,7 @@ export interface CreatePostInput {
   experienceLevel?: ExperienceLevel;
   applicationUrl?: string;
   applicationDeadline?: Date;
+  scheduledAt?: Date | null;
 }
 
 // ─────────────────────────────────────────────────
@@ -109,6 +112,8 @@ export interface Draft {
 
   createdAt: Date;
   updatedAt: Date;
+
+  scheduledAt?: Date | null;
 }
 
 export interface CreateDraftInput {
@@ -121,6 +126,7 @@ export interface CreateDraftInput {
   topics?: string[];
   visibility?: PostVisibility;
   commentsEnabled?: boolean;
+  scheduledAt?: Date | null;
 }
 
 // ─────────────────────────────────────────────────

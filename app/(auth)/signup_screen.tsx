@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Checkbox from "expo-checkbox";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import ConfirmationModal from "../(modal)/confirm_modal";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -77,7 +77,15 @@ const SignUpScreen = () => {
 
   return (
     <AuthWebLayout>
-      {content}
+      {!isWeb && (
+        <>
+          <Image source={require("@/assets/images/sp.png")} style={styles.bgImage} />
+          <View style={styles.overlay} />
+        </>
+      )}
+      <ScrollView style={styles.scroll} contentContainerStyle={isWeb ? undefined : styles.scrollContent}>
+        {content}
+      </ScrollView>
       <ConfirmationModal visible={errorModal.visible} title={errorModal.title} message={errorModal.message} isError onCancel={() => setErrorModal({ ...errorModal, visible: false })} />
     </AuthWebLayout>
   );
@@ -86,6 +94,10 @@ const SignUpScreen = () => {
 export default SignUpScreen;
 
 const styles = StyleSheet.create({
+  bgImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", resizeMode: "cover" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.82)" },
+  scroll: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
   content: { flex: 1, padding: 16 },
   title: { fontWeight: "600", fontSize: 28, marginBottom: 10, marginTop: 40, alignSelf: "center" },
   fields: { gap: 6 },

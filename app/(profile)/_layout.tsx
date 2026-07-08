@@ -9,8 +9,8 @@ export default function ProfileLayout() {
 
   const stack = (
     <Stack>
-      <Stack.Screen name="edit_profile" options={{ title: "Edit Profile", headerTitleAlign: "center", headerShown: !isWeb }} />
-      <Stack.Screen name="edit_links" options={{ title: "Add Social Links", headerShadowVisible: false, headerTitleAlign: "center", headerShown: !isWeb }} />
+      <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
+      <Stack.Screen name="edit_links" options={{ headerShown: false }} />
       <Stack.Screen name="post_detail" options={{ headerShown: false }} />
       <Stack.Screen name="public_profile" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />

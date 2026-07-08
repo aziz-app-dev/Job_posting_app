@@ -4,9 +4,8 @@ import { useAuth } from "@/context/AuthContext";
 import { updateUserProfile } from "@/services/authService";
 import { uploadImageToCloudinary } from "@/services/cloundinary_services";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import ConfirmationModal from "../(modal)/confirm_modal";
@@ -16,6 +15,8 @@ const PROGRESS = 0.48;
 const ImgScreen = () => {
   const isWeb = useIsWebLayout();
   const { updateProfile } = useAuth();
+  const { fromEdit } = useLocalSearchParams<{ fromEdit?: string }>();
+  const isFromEdit = fromEdit === "true";
   const [imageUri, setImageUri] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorModal, setErrorModal] = useState({ visible: false, title: "", message: "" });
@@ -26,18 +27,12 @@ const ImgScreen = () => {
       setErrorModal({ visible: true, title: "Permission Required", message: "Permission to access gallery is required!" });
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 1 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 1 });
     if (!result.canceled) setImageUri(result.assets[0].uri);
   };
 
-  const cropImage = async () => {
-    if (!imageUri) return;
-    const result = await ImageManipulator.manipulateAsync(imageUri, [{ crop: { originX: 0, originY: 0, width: 200, height: 200 } }], { compress: 1, format: ImageManipulator.SaveFormat.PNG });
-    setImageUri(result.uri);
-  };
-
   const handleContinue = async () => {
-    if (!imageUri) { router.replace("/(auth)/profile_into_screen"); return; }
+    if (!imageUri) return;
     setLoading(true);
     try {
       const cloudinaryUrl = await uploadImageToCloudinary(imageUri);
@@ -45,12 +40,21 @@ const ImgScreen = () => {
         await updateUserProfile(undefined, cloudinaryUrl);
         await updateProfile({ photoURL: cloudinaryUrl });
       }
-      router.replace("/(auth)/profile_into_screen");
+      if (isFromEdit) {
+        if (router.canGoBack()) router.back();
+        else router.replace("/(tabs)");
+      } else {
+        router.replace("/(auth)/profile_into_screen");
+      }
     } catch {
       setErrorModal({ visible: true, title: "Error", message: "Failed to upload image. Please try again." });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSkip = () => {
+    router.replace("/(auth)/profile_into_screen");
   };
 
   return (
@@ -61,13 +65,15 @@ const ImgScreen = () => {
             <Pressable onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} />
             </Pressable>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${PROGRESS * 100}%` }]} />
-            </View>
+            {!isFromEdit && (
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${PROGRESS * 100}%` }]} />
+              </View>
+            )}
           </View>
         )}
 
-        {isWeb && (
+        {isWeb && !isFromEdit && (
           <View style={webStyles.progressBar}>
             <View style={[webStyles.progressFill, { width: `${PROGRESS * 100}%` }]} />
           </View>
@@ -85,7 +91,7 @@ const ImgScreen = () => {
           </Pressable>
 
           {imageUri && (
-            <Pressable onPress={cropImage}>
+            <Pressable onPress={pickImage}>
               <View style={styles.cropBtn}>
                 <Ionicons name="crop-outline" size={20} />
                 <Text>Edit</Text>
@@ -95,10 +101,12 @@ const ImgScreen = () => {
         </View>
 
         <View style={isWeb ? webStyles.footer : styles.footer}>
-          <MyBtn title="Continue" textColor="#FFFFFF" onPress={handleContinue} loading={loading} />
-          <Pressable onPress={() => router.replace("/(auth)/profile_into_screen")}>
-            <Text style={styles.skipText}>Skip for now</Text>
-          </Pressable>
+          <MyBtn title="Continue" textColor="#FFFFFF" onPress={handleContinue} loading={loading} disabled={!imageUri && isFromEdit} />
+          {!isFromEdit && (
+            <Pressable onPress={handleSkip}>
+              <Text style={styles.skipText}>Skip for now</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 

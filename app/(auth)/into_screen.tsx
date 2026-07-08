@@ -1,6 +1,7 @@
 import AuthBtn from "@/components/auth_btn";
 import AuthWebLayout, { useIsWebLayout } from "@/components/AuthWebLayout";
-import { signInWithApple, signInWithGoogle } from "@/services/authService";
+import { signInWithApple, signInWithGoogle, signInWithGoogleIdToken } from "@/services/authService";
+import * as Google from "expo-auth-session/providers/google";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -20,10 +21,50 @@ const IntoScreen = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [errorModal, setErrorModal] = useState({ visible: false, title: "", message: "" });
 
+  const [, , googlePromptAsync] = Google.useAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    scopes: ["profile", "email"],
+  });
+
   const handleGoogleSignIn = async () => {
+    if (Platform.OS === "web") {
+      setIsLoading(true);
+      setLoadingProvider("google");
+      const { user, error } = await signInWithGoogle();
+      setIsLoading(false);
+      setLoadingProvider(null);
+      if (error) {
+        setErrorModal({ visible: true, title: "Google Sign-In Failed", message: error });
+        return;
+      }
+      if (user) {
+        router.replace(user.displayName ? "/(tabs)" : "/(auth)/user_name_screen");
+      }
+      return;
+    }
+
     setIsLoading(true);
     setLoadingProvider("google");
-    const { user, error } = await signInWithGoogle();
+    const result = await googlePromptAsync();
+
+    if (result?.type !== "success") {
+      setIsLoading(false);
+      setLoadingProvider(null);
+      if (result?.type === "error") {
+        setErrorModal({ visible: true, title: "Google Sign-In Failed", message: result.error?.description || "Authentication failed" });
+      }
+      return;
+    }
+
+    const idToken = result.authentication?.idToken;
+    if (!idToken) {
+      setIsLoading(false);
+      setLoadingProvider(null);
+      setErrorModal({ visible: true, title: "Google Sign-In Failed", message: "No ID token received" });
+      return;
+    }
+
+    const { user, error } = await signInWithGoogleIdToken(idToken);
     setIsLoading(false);
     setLoadingProvider(null);
     if (error) {

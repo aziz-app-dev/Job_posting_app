@@ -126,20 +126,18 @@ const EditProfileScreen: React.FC = () => {
   };
 
   const handleImageEdit = () => {
-    router.push("/(auth)/img_screen");
+    router.push("/(auth)/img_screen?fromEdit=true");
   };
 
   return (
     <View style={styles.container}>
-      {isWeb && (
-        <View style={styles.webHeader}>
-          <TouchableOpacity onPress={goBack} style={styles.webBackButton}>
-            <Feather name="arrow-left" size={22} color="#111" />
-          </TouchableOpacity>
-          <Text style={styles.webHeaderTitle}>Edit Profile</Text>
-          <View style={{ width: 32 }} />
-        </View>
-      )}
+      <View style={styles.webHeader}>
+        <TouchableOpacity onPress={goBack} style={styles.webBackButton}>
+          <Feather name="arrow-left" size={22} color="#111" />
+        </TouchableOpacity>
+        <Text style={styles.webHeaderTitle}>Edit Profile</Text>
+        <View style={{ width: 32 }} />
+      </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Profile Image */}
         <View style={styles.imageContainer}>

@@ -74,18 +74,11 @@ export const deleteAccount = async (): Promise<{ error: string | null }> => {
   }
 };
 
-// Sign in with Google
+// Sign in with Google (web only - uses popup)
 export const signInWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
-
-    let userCredential;
-    if (Platform.OS === "web") {
-      userCredential = await auth.signInWithPopup(provider);
-    } else {
-      userCredential = await auth.signInWithRedirect(provider);
-      return { user: null, error: null }; // Redirect handles the rest
-    }
+    const userCredential = await auth.signInWithPopup(provider);
 
     if (userCredential.user) {
       await createUserProfile(
@@ -99,8 +92,29 @@ export const signInWithGoogle = async () => {
     return { user: userCredential.user, error: null };
   } catch (error: any) {
     if (error.code === "auth/popup-closed-by-user") {
-      return { user: null, error: null }; // User cancelled
+      return { user: null, error: null };
     }
+    return { user: null, error: getErrorMessage(error.code) || error.message };
+  }
+};
+
+// Sign in with Google ID token (native - uses expo-auth-session)
+export const signInWithGoogleIdToken = async (idToken: string) => {
+  try {
+    const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+    const userCredential = await auth.signInWithCredential(credential);
+
+    if (userCredential.user) {
+      await createUserProfile(
+        userCredential.user.uid,
+        userCredential.user.email || "",
+        userCredential.user.displayName || "",
+        userCredential.user.photoURL || ""
+      );
+    }
+
+    return { user: userCredential.user, error: null };
+  } catch (error: any) {
     return { user: null, error: getErrorMessage(error.code) || error.message };
   }
 };
