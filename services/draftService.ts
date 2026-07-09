@@ -13,7 +13,7 @@ export const saveDraft = async (
     const draftRef = db.collection("drafts").doc();
     const now = firebase.firestore.FieldValue.serverTimestamp();
 
-    const draftData = {
+    const draftData: Record<string, any> = {
       id: draftRef.id,
       authorId,
       caption: input.caption || "",
@@ -28,6 +28,10 @@ export const saveDraft = async (
       createdAt: now,
       updatedAt: now,
     };
+
+    if (input.scheduledAt) {
+      draftData.scheduledAt = input.scheduledAt;
+    }
 
     await draftRef.set(draftData);
 
@@ -58,6 +62,7 @@ export const getDrafts = async (
         id: doc.id,
         createdAt: toDate(data.createdAt),
         updatedAt: toDate(data.updatedAt),
+        scheduledAt: data.scheduledAt ? toDate(data.scheduledAt) : null,
       } as Draft;
     });
 
@@ -94,6 +99,7 @@ export const getDraftById = async (
       id: doc.id,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
+      scheduledAt: data.scheduledAt ? toDate(data.scheduledAt) : null,
     } as Draft;
 
     return { draft, error: null };
@@ -158,6 +164,7 @@ export const subscribeToDrafts = (
             id: doc.id,
             createdAt: toDate(data.createdAt),
             updatedAt: toDate(data.updatedAt),
+            scheduledAt: data.scheduledAt ? toDate(data.scheduledAt) : null,
           } as Draft;
         });
         callback(drafts);

@@ -41,6 +41,7 @@ const SignUpScreen = () => {
 
   const content = (
     <View style={isWeb ? webStyles.content : styles.content}>
+      <Image source={require("@/assets/logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={isWeb ? webStyles.title : styles.title}>Create an account</Text>
       {isWeb && <Text style={webStyles.subtitle}>Join WorkCircle today</Text>}
 
@@ -99,7 +100,8 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   content: { flex: 1, padding: 16 },
-  title: { fontWeight: "600", fontSize: 28, marginBottom: 10, marginTop: 40, alignSelf: "center" },
+  logo: { width: 100, height: 100, alignSelf: "center", marginBottom: 10, marginTop: 20 },
+  title: { fontWeight: "600", fontSize: 28, marginBottom: 10, alignSelf: "center" },
   fields: { gap: 6 },
   errorText: { color: Colors.rose, fontSize: 16, marginTop: -4, marginBottom: 6 },
   termsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },

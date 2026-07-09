@@ -101,6 +101,7 @@ import { router as expoRouter, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { startForegroundScheduler, stopForegroundScheduler } from "@/services/postScheduler";
 
 export const unstable_settings = { initialRouteName: "index" };
 
@@ -141,6 +142,14 @@ function useDeepLinkHandler() {
 
 function MessageNotificationListener() {
   useMessageNotifications();
+  return null;
+}
+
+function SchedulerInitializer() {
+  useEffect(() => {
+    startForegroundScheduler();
+    return () => stopForegroundScheduler();
+  }, []);
   return null;
 }
 
@@ -189,6 +198,7 @@ export default function RootLayout() {
                         }}
                       />
                     </Stack>
+                    <SchedulerInitializer />
                     <MessageNotificationListener />
                     <ToastContainer />
                     <StatusBar style="auto" />

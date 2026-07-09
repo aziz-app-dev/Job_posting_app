@@ -46,6 +46,13 @@ const EXPERIENCE_LEVELS: ExperienceLevel[] = [
 
 const MAX_CHARS = 300;
 
+const schedulePresets = [
+  { label: "1 hour", minutes: 60 },
+  { label: "3 hours", minutes: 180 },
+  { label: "Tomorrow", minutes: 1440 },
+  { label: "Next week", minutes: 10080 },
+];
+
 type MediaItem = {
   uri: string;
   type: "image" | "video";
@@ -68,6 +75,8 @@ export default function AddPostScreen() {
     removeDraft,
     editPost,
     getPost,
+    schedulePost,
+    cancelSchedule,
   } = usePost();
 
   const [caption, setCaption] = useState("");
@@ -82,6 +91,8 @@ export default function AddPostScreen() {
   const [currentPostId, setCurrentPostId] = useState<string | null>(null);
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [originalMediaUrl, setOriginalMediaUrl] = useState<string | null>(null);
+  const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   // Job post state
   const [isJobPost, setIsJobPost] = useState(false);
@@ -130,6 +141,7 @@ export default function AddPostScreen() {
         setCommentsOn(draft.commentsEnabled);
         setVisibility(draft.visibility);
         setCurrentDraftId(draft.id);
+        setScheduledAt(draft.scheduledAt ?? null);
         if (draft.localMediaUri) {
           setMedia({
             uri: draft.localMediaUri,
@@ -305,6 +317,44 @@ export default function AddPostScreen() {
     }
   };
 
+  const formatScheduleDate = (d: Date) => {
+    const now = new Date();
+    const diff = d.getTime() - now.getTime();
+    if (diff < 0) return "Already passed";
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    if (days > 0) return `In ${days}d ${hours}h`;
+    if (hours > 0) return `In ${hours}h ${minutes}m`;
+    return `In ${minutes}m`;
+  };
+
+  const handleSchedulePost = async () => {
+    if (isUploading || !scheduledAt) return;
+
+    const { error } = await schedulePost(
+      {
+        caption,
+        localMediaUri: media?.uri || null,
+        mediaType: media?.type || null,
+        title,
+        url,
+        location,
+        topics,
+        visibility,
+        commentsEnabled: commentsOn,
+      },
+      scheduledAt
+    );
+
+    if (!error) {
+      resetForm();
+      router.back();
+    } else {
+      showAlert("error", "Error", error);
+    }
+  };
+
   const resetForm = () => {
     setCaption("");
     setMedia(null);
@@ -315,6 +365,7 @@ export default function AddPostScreen() {
     setCurrentPostId(null);
     setIsEditingPost(false);
     setOriginalMediaUrl(null);
+    setScheduledAt(null);
     setIsJobPost(false);
     setCompanyName("");
     setJobType("Full-time");
@@ -390,13 +441,13 @@ export default function AddPostScreen() {
               isUploading ||
               (isJobPost && !companyName.trim())
             }
-            onPress={handlePost}
+            onPress={scheduledAt ? handleSchedulePost : handlePost}
           >
             {isUploading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Text style={styles.postText}>
-                {isEditingPost ? "Update" : "Post"}
+                {isEditingPost ? "Update" : scheduledAt ? "Schedule" : "Post"}
               </Text>
             )}
           </TouchableOpacity>
@@ -669,6 +720,37 @@ export default function AddPostScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.row, scheduledAt && styles.rowSelected]}
+          onPress={() => setShowScheduleModal(true)}
+        >
+          <Ionicons
+            name="time-outline"
+            size={24}
+            color={scheduledAt ? Colors.black : "#555"}
+          />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={[styles.rowLabel, scheduledAt && { color: Colors.black }]}>
+              Schedule post
+            </Text>
+            <Text style={styles.rowSub}>
+              {scheduledAt
+                ? formatScheduleDate(scheduledAt)
+                : "Set a future publish time"}
+            </Text>
+          </View>
+          {scheduledAt ? (
+            <TouchableOpacity
+              onPress={() => setScheduledAt(null)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-circle" size={20} color="#FF3B30" />
+            </TouchableOpacity>
+          ) : (
+            <Feather name="chevron-right" size={18} color="#999" />
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.row}
           onPress={() => setShowCommentsModal(true)}
         >
@@ -859,6 +941,111 @@ export default function AddPostScreen() {
                 )}
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Schedule Modal */}
+      <Modal
+        visible={showScheduleModal}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setShowScheduleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Schedule post</Text>
+            <Text style={styles.scheduleHint}>
+              Set a date and time for this post to be published automatically
+            </Text>
+            <View style={styles.scheduleQuickRow}>
+              {schedulePresets.map((preset) => (
+                <TouchableOpacity
+                  key={preset.label}
+                  style={styles.schedulePresetBtn}
+                  onPress={() => {
+                    const d = new Date();
+                    d.setMinutes(d.getMinutes() + preset.minutes);
+                    setScheduledAt(d);
+                    setShowScheduleModal(false);
+                  }}
+                >
+                  <Text style={styles.schedulePresetText}>{preset.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.scheduleInputRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.scheduleInputLabel}>Date</Text>
+                <TextInput
+                  style={styles.scheduleInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#999"
+                  value={
+                    scheduledAt
+                      ? scheduledAt.toISOString().slice(0, 10)
+                      : new Date().toISOString().slice(0, 10)
+                  }
+                  onChangeText={(text) => {
+                    const parts = text.split("-");
+                    if (parts.length === 3) {
+                      const d = new Date(
+                        parseInt(parts[0]),
+                        parseInt(parts[1]) - 1,
+                        parseInt(parts[2]),
+                        scheduledAt?.getHours() || new Date().getHours(),
+                        scheduledAt?.getMinutes() || new Date().getMinutes()
+                      );
+                      if (!isNaN(d.getTime())) setScheduledAt(d);
+                    }
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.scheduleInputLabel}>Time</Text>
+                <TextInput
+                  style={styles.scheduleInput}
+                  placeholder="HH:MM (24h)"
+                  placeholderTextColor="#999"
+                  value={
+                    scheduledAt
+                      ? `${String(scheduledAt.getHours()).padStart(2, "0")}:${String(scheduledAt.getMinutes()).padStart(2, "0")}`
+                      : ""
+                  }
+                  onChangeText={(text) => {
+                    const parts = text.split(":");
+                    if (parts.length === 2) {
+                      const d = new Date(
+                        scheduledAt?.getFullYear() || new Date().getFullYear(),
+                        scheduledAt?.getMonth() || new Date().getMonth(),
+                        scheduledAt?.getDate() || new Date().getDate(),
+                        parseInt(parts[0]) || 0,
+                        parseInt(parts[1]) || 0
+                      );
+                      if (!isNaN(d.getTime())) setScheduledAt(d);
+                    }
+                  }}
+                />
+              </View>
+            </View>
+            <View style={styles.scheduleActions}>
+              <TouchableOpacity
+                style={styles.scheduleCancelBtn}
+                onPress={() => {
+                  setScheduledAt(null);
+                  setShowScheduleModal(false);
+                }}
+              >
+                <Text style={styles.scheduleCancelText}>Remove schedule</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.scheduleConfirmBtn}
+                onPress={() => setShowScheduleModal(false)}
+              >
+                <Text style={styles.scheduleConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1160,6 +1347,82 @@ const styles = StyleSheet.create({
   },
   modalOptionTextSelected: {
     color: "#007AFF",
+    fontWeight: "600",
+  },
+
+  // Schedule Modal
+  scheduleHint: {
+    fontSize: 13,
+    color: "#777",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  scheduleQuickRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 20,
+    justifyContent: "center",
+  },
+  schedulePresetBtn: {
+    backgroundColor: "#f1f1f1",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  schedulePresetText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "500",
+  },
+  scheduleInputRow: {
+    flexDirection: "row",
+    marginBottom: 20,
+  },
+  scheduleInputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 6,
+  },
+  scheduleInput: {
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#333",
+  },
+  scheduleActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  scheduleCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    alignItems: "center",
+  },
+  scheduleCancelText: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "500",
+  },
+  scheduleConfirmBtn: {
+    flex: 1,
+    backgroundColor: Colors.black,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  scheduleConfirmText: {
+    fontSize: 14,
+    color: "#fff",
     fontWeight: "600",
   },
 });

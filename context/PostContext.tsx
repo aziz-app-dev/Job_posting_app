@@ -5,6 +5,7 @@ import { useToast } from "./ToastContext";
 import { createPost, deletePost, getPostsByUser, updatePost, getPostById } from "@/services/postService";
 import { deleteDraft, getDrafts, saveDraft, subscribeToDrafts, updateDraft } from "@/services/draftService";
 import { uploadMediaToCloudinary, generateVideoThumbnail } from "@/services/cloundinary_services";
+import { schedulePost as schedulePostService, cancelScheduledPost, uploadDraftMedia } from "@/services/postScheduler";
 
 // ─────────────────────────────────────────────────
 // Context Types
@@ -38,6 +39,9 @@ interface PostContextType {
   publishFromDraft: (draft: Draft) => Promise<{ postId?: string; error: string | null }>;
 
   loadDrafts: () => Promise<void>;
+
+  schedulePost: (input: CreateDraftInput, scheduledAt: Date) => Promise<{ draftId?: string; error: string | null }>;
+  cancelSchedule: (draftId: string) => Promise<{ error: string | null }>;
 }
 
 // ─────────────────────────────────────────────────
@@ -425,6 +429,73 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     return result;
   }, [publishPost]);
 
+  const schedulePost = useCallback(async (
+    input: CreateDraftInput,
+    scheduledAt: Date
+  ): Promise<{ draftId?: string; error: string | null }> => {
+    if (!user?.uid) return { error: "Not authenticated" };
+
+    if (input.localMediaUri) {
+      showProgress("Uploading media for scheduled post...");
+    }
+
+    let remoteMediaUrl: string | null = null;
+
+    const { draftId, error: draftError } = await saveToDrafts({
+      ...input,
+      scheduledAt,
+    });
+
+    if (draftError || !draftId) {
+      return { error: draftError || "Failed to save draft" };
+    }
+
+    if (input.localMediaUri) {
+      const { url, error: uploadError } = await uploadDraftMedia({
+        id: draftId,
+        authorId: user.uid,
+        caption: input.caption || "",
+        localMediaUri: input.localMediaUri,
+        mediaType: input.mediaType || null,
+        title: input.title || "",
+        url: input.url || "",
+        location: input.location || "",
+        topics: input.topics || [],
+        visibility: input.visibility || "Public",
+        commentsEnabled: input.commentsEnabled ?? true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        scheduledAt,
+      });
+      if (uploadError) {
+        showError("Media upload failed, but draft saved");
+      } else if (url) {
+        remoteMediaUrl = url;
+        await updateDraft(draftId, { remoteMediaUrl: url } as any);
+      }
+    }
+
+    const { error: scheduleError } = await schedulePostService(draftId, scheduledAt);
+    if (scheduleError) {
+      showError("Post scheduled but notification may not fire");
+    } else {
+      showSuccess("Post scheduled!");
+    }
+
+    return { draftId, error: null };
+  }, [user, saveToDrafts, showProgress, showSuccess, showError, updateDraft]);
+
+  const cancelSchedule = useCallback(async (
+    draftId: string
+  ): Promise<{ error: string | null }> => {
+    const { error } = await cancelScheduledPost(draftId);
+    if (!error) {
+      await updateDraft(draftId, { scheduledAt: null as any });
+      showSuccess("Schedule cancelled");
+    }
+    return { error };
+  }, [showSuccess, updateDraft]);
+
   return (
     <PostContext.Provider
       value={{
@@ -443,6 +514,8 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         getPost,
         publishFromDraft,
         loadDrafts,
+        schedulePost,
+        cancelSchedule,
       }}
     >
       {children}

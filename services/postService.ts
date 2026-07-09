@@ -49,6 +49,7 @@ export const createPost = async (
       commentsCount: 0,
       createdAt: now,
       updatedAt: now,
+      scheduledAt: input.scheduledAt || null,
     };
 
     await postRef.set(postData);
@@ -96,6 +97,7 @@ export const getPostById = async (
       id: doc.id,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
+      scheduledAt: data.scheduledAt ? toDate(data.scheduledAt) : null,
     } as Post;
 
     return { post, error: null };

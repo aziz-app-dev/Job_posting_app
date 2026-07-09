@@ -116,6 +116,18 @@ const ProfileScreen: React.FC = () => {
     return date.toLocaleDateString();
   };
 
+  const formatScheduleDate = (d: Date) => {
+    const now = new Date();
+    const diff = d.getTime() - now.getTime();
+    if (diff < 0) return "Overdue";
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    if (days > 0) return `in ${days}d ${hours}h`;
+    if (hours > 0) return `in ${hours}h ${minutes}m`;
+    return `in ${minutes}m`;
+  };
+
   // Handle post media press
   const handlePostMediaPress = (post: Post) => {
     if (!post.mediaUrl) return;
@@ -276,6 +288,14 @@ const ProfileScreen: React.FC = () => {
               />
               <Text style={styles.draftVisibilityText}>{draft.visibility}</Text>
             </View>
+            {draft.scheduledAt && (
+              <View style={styles.draftScheduleBadge}>
+                <Ionicons name="time-outline" size={12} color="#e67e22" />
+                <Text style={styles.draftScheduleText}>
+                  {formatScheduleDate(draft.scheduledAt)}
+                </Text>
+              </View>
+            )}
           </View>
           {/* Caption below */}
           <Text style={styles.draftCaption} numberOfLines={2}>
@@ -663,6 +683,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#888",
     marginTop: 4,
+  },
+  draftScheduleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3e0",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  draftScheduleText: {
+    fontSize: 11,
+    color: "#e67e22",
+    marginLeft: 3,
+    fontWeight: "500",
   },
 });
 

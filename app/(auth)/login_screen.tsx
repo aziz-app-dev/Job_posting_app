@@ -50,6 +50,7 @@ const LoginScreen = () => {
 
   const content = (
     <View style={isWeb ? webStyles.content : styles.content}>
+      <Image source={require("@/assets/logo.png")} style={styles.logo} resizeMode="contain" />
       <Text style={isWeb ? webStyles.title : styles.title}>Good to see you again!</Text>
       {isWeb && <Text style={webStyles.subtitle}>Sign in to your WorkCircle account</Text>}
 
@@ -94,6 +95,7 @@ const styles = StyleSheet.create({
   bgImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", resizeMode: "cover" },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.82)" },
   content: { flex: 1, padding: 16, justifyContent: "center" },
+  logo: { width: 100, height: 100, alignSelf: "center", marginBottom: 20 },
   title: { fontWeight: "600", fontSize: 28, marginBottom: 10, alignSelf: "center" },
   fields: { gap: 6 },
   errorText: { color: Colors.rose, fontSize: 16, marginTop: -4, marginBottom: 6 },
