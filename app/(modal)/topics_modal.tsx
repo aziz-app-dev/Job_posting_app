@@ -2,9 +2,11 @@ import MyBtn from "@/components/btn";
 import MyInput from "@/components/input_field";
 import { INTERESTS } from "@/constants/data";
 import { Colors } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import { generateTopicSuggestions } from "@/services/aiService";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -21,6 +23,10 @@ type TopicsSheetProps = {
   topics: string[];
   onSave: (topics: string[]) => void;
   onClose: () => void;
+  // Optional context used to generate smarter AI topic suggestions
+  caption?: string;
+  title?: string;
+  isJobPost?: boolean;
 };
 
 // const SUGGESTED_TOPICS = [
@@ -45,10 +51,16 @@ export default function TopicsSheet({
   topics,
   onSave,
   onClose,
+  caption = "",
+  title = "",
+  isJobPost = false,
 }: TopicsSheetProps) {
   const [tempTopics, setTempTopics] = useState<string[]>(topics);
   const [newTopic, setNewTopic] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [aiTopics, setAiTopics] = useState<string[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     const showEvent =
@@ -86,6 +98,27 @@ export default function TopicsSheet({
     } else {
       setTempTopics([...tempTopics, topic]);
     }
+  };
+
+  const handleSuggestTopics = async () => {
+    if (isSuggesting) return;
+    Keyboard.dismiss();
+    setIsSuggesting(true);
+    setAiError(null);
+
+    const { topics: results, error } = await generateTopicSuggestions({
+      caption,
+      title,
+      isJobPost,
+      existing: tempTopics,
+    });
+
+    setIsSuggesting(false);
+    if (error) {
+      setAiError(error);
+      return;
+    }
+    setAiTopics(results);
   };
 
   const handleDone = () => {
@@ -128,6 +161,57 @@ export default function TopicsSheet({
                 }
               />
             </View>
+
+            {/* AI Suggest button */}
+            <TouchableOpacity
+              style={[styles.aiSuggestBtn, isSuggesting && { opacity: 0.7 }]}
+              onPress={handleSuggestTopics}
+              disabled={isSuggesting}
+              activeOpacity={0.8}
+            >
+              {isSuggesting ? (
+                <ActivityIndicator size="small" color={Colors.black} />
+              ) : (
+                <Ionicons name="sparkles" size={16} color={Colors.black} />
+              )}
+              <Text style={styles.aiSuggestBtnText}>
+                {isSuggesting ? "Thinking..." : "Suggest topics with AI"}
+              </Text>
+            </TouchableOpacity>
+
+            {aiError && <Text style={styles.aiError}>{aiError}</Text>}
+
+            {/* AI-suggested topics */}
+            {aiTopics.length > 0 && (
+              <>
+                <View style={styles.aiSectionHeader}>
+                  <Ionicons name="sparkles" size={13} color={Colors.black} />
+                  <Text style={styles.aiSectionTitle}>AI suggestions</Text>
+                </View>
+                <View style={styles.chipsRow}>
+                  {aiTopics.map((topic) => (
+                    <TouchableOpacity
+                      key={topic}
+                      style={[
+                        styles.suggestedChip,
+                        tempTopics.includes(topic) && styles.suggestedChipSelected,
+                      ]}
+                      onPress={() => toggleSuggestedTopic(topic)}
+                    >
+                      <Text
+                        style={[
+                          styles.suggestedChipText,
+                          tempTopics.includes(topic) &&
+                            styles.suggestedChipTextSelected,
+                        ]}
+                      >
+                        {topic}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             {tempTopics.length > 0 && (
               <>
@@ -245,6 +329,39 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#666",
     marginBottom: 10,
+  },
+  aiSuggestBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.splashBg,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  aiSuggestBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.black,
+  },
+  aiError: {
+    fontSize: 12,
+    color: "#FF3B30",
+    marginBottom: 8,
+  },
+  aiSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  aiSectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.black,
   },
   chipsRow: {
     flexDirection: "row",

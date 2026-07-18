@@ -70,6 +70,14 @@ Built with a **single TypeScript codebase** that runs on iOS, Android, and Web u
 - **Unread message badges** — on the Messages tab (mobile) and sidebar (web)
 - Drafts system for saving unpublished posts
 
+### AI-Powered Content (Groq)
+- **AI caption / job-description suggestions** — generate post copy with one tap on the Create Post screen, powered by the [Groq](https://groq.com/) API (Llama 3.3 70B)
+- **Adjustable length** — choose **Short / Medium / Long** and regenerate instantly
+- **Edit before applying** — tap a suggestion to open it in an editable box, tweak the wording, then insert it
+- **AI topic suggestions** — recommend relevant, searchable topics/tags based on your post content
+- **Fully optional** — the caption field is a normal text input; AI is just a helper you can ignore and type your own
+- **Graceful fallback** — friendly error if the API key is missing or the device is offline
+
 ### Jobs & Careers
 - Create job posts with salary, experience level, job type, location
 - Search and filter job listings
@@ -100,6 +108,7 @@ Built with a **single TypeScript codebase** that runs on iOS, Android, and Web u
 | **Navigation** | Expo Router 6 (file-based routing) |
 | **Auth & DB** | Firebase Auth, Cloud Firestore, Realtime Database |
 | **Media** | Cloudinary (uploads), expo-image, expo-video |
+| **AI** | Groq API (Llama 3.3 70B) for caption & topic suggestions |
 | **State** | React Context API (Auth, Feed, Post, Collection, Notifications, Toast) |
 | **Storage** | AsyncStorage (auth persistence), Firestore (app data) |
 | **UI** | React Native core components, @gorhom/bottom-sheet, react-native-modal |
@@ -150,6 +159,7 @@ LightHouse/
 │   ├── jobApplicationService.ts
 │   ├── companyService.ts
 │   ├── messagingService.ts
+│   ├── aiService.ts              # Groq AI caption & topic suggestions
 │   └── ... (18+ services)
 ├── constants/                    # Types, colors, static data
 ├── hooks/                        # Custom hooks
@@ -226,9 +236,14 @@ EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
 # Cloudinary (for image/video uploads)
 EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
+
+# Groq AI (for post caption / description & topic suggestions) — optional
+EXPO_PUBLIC_GROQ_API_KEY=your_groq_api_key
 ```
 
 > **Important:** Never commit `.env` to git. It's already in `.gitignore`. Only `.env.example` should be committed.
+
+> **Note on the Groq key:** Like all `EXPO_PUBLIC_*` values, the Groq key is bundled into the client app. This is fine for development, but for production consider proxying AI requests through a small backend / Cloud Function so the key isn't shipped to devices. The AI features are optional — the app runs fine without a Groq key (the AI Suggest buttons simply show a "not configured" message).
 
 ### Cloudinary quick setup
 
@@ -239,6 +254,23 @@ EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
 5. Set the preset's folder / transformations as you prefer.
 
 Where to find these values: **Firebase Console → Project Settings → General → Your apps → SDK setup and configuration**.
+
+### Groq AI quick setup (optional)
+
+The AI Suggest features (post captions, job descriptions, and topic tags) use the [Groq](https://groq.com/) API. To enable them:
+
+1. Create a free account at [console.groq.com](https://console.groq.com/).
+2. Go to **API Keys** → **Create API Key** and copy it (starts with `gsk_...`).
+3. Add it to your `.env`:
+   ```bash
+   EXPO_PUBLIC_GROQ_API_KEY=gsk_your_key_here
+   ```
+4. Restart the dev server with a cleared cache so the new env var is picked up:
+   ```bash
+   npx expo start --clear
+   ```
+
+The model used is `llama-3.3-70b-versatile` (configurable in [services/aiService.ts](services/aiService.ts)). If you skip this step, the app still works — the AI Suggest buttons just report that suggestions aren't configured.
 
 ---
 
@@ -578,6 +610,19 @@ pod install
 
 ### Firebase Auth: "An error occurred. Please try again"
 Usually a mismatched API key or a blocked sign-in provider. Enable logging in [services/authService.ts](services/authService.ts) (already enabled with `console.log("[signIn] error:", ...)`) and watch Metro output for the actual error code.
+
+### On-screen keyboard doesn't open on a physical Android device
+When a phone is connected via USB for debugging, Android may detect a "hardware keyboard" and suppress the soft keyboard, so tapping a text input does nothing. Re-enable the on-screen keyboard:
+
+```bash
+adb shell settings put secure show_ime_with_hard_keyboard 1
+```
+
+Or on the device: **Settings → System → Languages & input → Physical keyboard → turn ON "Show on-screen keyboard"** (wording varies by manufacturer). Note this can reset after unplug/reboot. Testing over Wi-Fi (no USB) avoids the issue entirely.
+
+### AI Suggest says "not configured" or "suggestions unavailable"
+- **Not configured** → `EXPO_PUBLIC_GROQ_API_KEY` is missing. Add it to `.env` and restart with `npx expo start --clear`.
+- **Unavailable / failed** → the device is offline, or the key is invalid/rate-limited. Confirm the device has internet and that the key is active in the [Groq Console](https://console.groq.com/).
 
 ---
 

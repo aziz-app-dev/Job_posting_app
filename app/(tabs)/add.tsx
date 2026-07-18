@@ -1,6 +1,7 @@
 import MyInput from "@/components/input_field";
 import { Colors } from "@/constants/theme";
 import { ExperienceLevel, JobType, PostVisibility } from "@/constants/types";
+import { generateCaptionSuggestions, SuggestionLength } from "@/services/aiService";
 import { useAuth } from "@/context/AuthContext";
 import { usePost } from "@/context/PostContext";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -10,6 +11,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -94,6 +96,16 @@ export default function AddPostScreen() {
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
+  // AI caption suggestions
+  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  // The suggestion currently opened for editing (null = show the list)
+  const [editingSuggestion, setEditingSuggestion] = useState<string | null>(null);
+  // Desired length of AI suggestions
+  const [suggestionLength, setSuggestionLength] =
+    useState<SuggestionLength>("medium");
+
   // Job post state
   const [isJobPost, setIsJobPost] = useState(false);
   const [companyName, setCompanyName] = useState("");
@@ -126,6 +138,58 @@ export default function AddPostScreen() {
 
   const showAlert = (type: "success" | "error" | "info", title: string, message: string) => {
     setAlertModal({ visible: true, type, title, message });
+  };
+
+  const handleSuggest = async (lengthOverride?: SuggestionLength) => {
+    if (isSuggesting) return;
+    const length = lengthOverride ?? suggestionLength;
+    setShowSuggestionsModal(true);
+    setIsSuggesting(true);
+    setSuggestions([]);
+    setEditingSuggestion(null);
+
+    const { suggestions: results, error } = await generateCaptionSuggestions({
+      draft: caption,
+      title,
+      topics,
+      isJobPost,
+      companyName,
+      length,
+    });
+
+    setIsSuggesting(false);
+
+    if (error) {
+      setShowSuggestionsModal(false);
+      showAlert("error", "Suggestions unavailable", error);
+      return;
+    }
+    setSuggestions(results);
+  };
+
+  // Change desired length and regenerate immediately
+  const changeSuggestionLength = (length: SuggestionLength) => {
+    if (isSuggesting || length === suggestionLength) return;
+    setSuggestionLength(length);
+    handleSuggest(length);
+  };
+
+  // Tap a suggestion → open it in the editable preview (does not apply yet)
+  const selectSuggestion = (text: string) => {
+    setEditingSuggestion(text.slice(0, MAX_CHARS));
+  };
+
+  // Confirm the (possibly edited) suggestion → put it into the caption
+  const applyEditedSuggestion = () => {
+    if (editingSuggestion == null) return;
+    setCaption(editingSuggestion.slice(0, MAX_CHARS));
+    setShowSuggestionsModal(false);
+    setEditingSuggestion(null);
+  };
+
+  const closeSuggestions = () => {
+    setShowSuggestionsModal(false);
+    setEditingSuggestion(null);
   };
 
   // Load draft data when draftId is provided
@@ -454,7 +518,11 @@ export default function AddPostScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
         {/* Media Preview */}
         <TouchableOpacity
           style={styles.mediaBox}
@@ -516,9 +584,26 @@ export default function AddPostScreen() {
             fontSize={14}
             borderWidth={0}
           />
-          <Text style={styles.counter}>
-            {caption.length}/{MAX_CHARS}
-          </Text>
+          <View style={styles.captionFooter}>
+            <TouchableOpacity
+              style={[styles.suggestBtn, isSuggesting && { opacity: 0.6 }]}
+              onPress={() => handleSuggest()}
+              disabled={isSuggesting}
+              activeOpacity={0.8}
+            >
+              {isSuggesting ? (
+                <ActivityIndicator size="small" color={Colors.black} />
+              ) : (
+                <Ionicons name="sparkles" size={14} color={Colors.black} />
+              )}
+              <Text style={styles.suggestBtnText}>
+                {isSuggesting ? "Thinking..." : "AI Suggest"}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.counter}>
+              {caption.length}/{MAX_CHARS}
+            </Text>
+          </View>
         </View>
 
         {/* Job Post Toggle Row */}
@@ -787,6 +872,9 @@ export default function AddPostScreen() {
           topics={topics}
           onSave={setTopics}
           onClose={() => setShowTopicsModal(false)}
+          caption={caption}
+          title={title}
+          isJobPost={isJobPost}
         />
       </Modal>
 
@@ -1050,6 +1138,149 @@ export default function AddPostScreen() {
         </View>
       </Modal>
 
+      {/* AI Suggestions Modal */}
+      <Modal
+        visible={showSuggestionsModal}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={closeSuggestions}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={[styles.modalContent, styles.suggestModalContent]}>
+            <View style={styles.suggestHeader}>
+              <View style={styles.suggestTitleRow}>
+                {editingSuggestion !== null && (
+                  <TouchableOpacity
+                    onPress={() => setEditingSuggestion(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="chevron-back" size={22} color={Colors.black} />
+                  </TouchableOpacity>
+                )}
+                <Ionicons name="sparkles" size={18} color={Colors.black} />
+                <Text style={styles.suggestTitle}>
+                  {editingSuggestion !== null ? "Edit suggestion" : "AI Suggestions"}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeSuggestions}>
+                <Ionicons name="close" size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.suggestScrollBody}
+            >
+            {isSuggesting ? (
+              <View style={styles.suggestLoading}>
+                <ActivityIndicator size="small" color={Colors.black} />
+                <Text style={styles.suggestLoadingText}>
+                  Writing suggestions for you...
+                </Text>
+              </View>
+            ) : editingSuggestion !== null ? (
+              // ── Editable preview of the selected suggestion ──
+              <>
+                <Text style={styles.suggestHint}>
+                  Edit the text below, then use it as your{" "}
+                  {isJobPost ? "job description" : "caption"}.
+                </Text>
+                <TextInput
+                  style={styles.suggestEditInput}
+                  value={editingSuggestion}
+                  onChangeText={(t) => setEditingSuggestion(t.slice(0, MAX_CHARS))}
+                  multiline
+                  autoFocus
+                  textAlignVertical="top"
+                  placeholder="Edit your text..."
+                  placeholderTextColor="#999"
+                />
+                <Text style={styles.suggestEditCounter}>
+                  {editingSuggestion.length}/{MAX_CHARS}
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.useSuggestionBtn,
+                    editingSuggestion.trim().length === 0 && { opacity: 0.5 },
+                  ]}
+                  onPress={applyEditedSuggestion}
+                  disabled={editingSuggestion.trim().length === 0}
+                >
+                  <Ionicons name="checkmark" size={18} color="#fff" />
+                  <Text style={styles.useSuggestionText}>Use this text</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // ── List of suggestions ──
+              <>
+                <Text style={styles.suggestHint}>
+                  Tap a suggestion to edit it before using it as your{" "}
+                  {isJobPost ? "job description" : "caption"}.
+                </Text>
+
+                {/* Length selector */}
+                <View style={styles.lengthRow}>
+                  <Text style={styles.lengthLabel}>Length</Text>
+                  <View style={styles.lengthChips}>
+                    {(["short", "medium", "long"] as SuggestionLength[]).map(
+                      (len) => (
+                        <TouchableOpacity
+                          key={len}
+                          style={[
+                            styles.lengthChip,
+                            suggestionLength === len && styles.lengthChipActive,
+                          ]}
+                          onPress={() => changeSuggestionLength(len)}
+                          disabled={isSuggesting}
+                        >
+                          <Text
+                            style={[
+                              styles.lengthChipText,
+                              suggestionLength === len &&
+                                styles.lengthChipTextActive,
+                            ]}
+                          >
+                            {len.charAt(0).toUpperCase() + len.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+                </View>
+
+                {suggestions.map((s, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestionItem}
+                    onPress={() => selectSuggestion(s)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.suggestionText}>{s}</Text>
+                    <View style={styles.suggestionEditHint}>
+                      <Ionicons name="create-outline" size={14} color="#888" />
+                      <Text style={styles.suggestionEditHintText}>Tap to edit</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={styles.regenerateBtn}
+                  onPress={() => handleSuggest()}
+                >
+                  <Ionicons name="refresh" size={16} color={Colors.black} />
+                  <Text style={styles.regenerateText}>Regenerate</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Alert Modal */}
       <ConfirmationModal
         visible={alertModal.visible}
@@ -1169,12 +1400,176 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
+  captionFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
   counter: {
     textAlign: "right",
     fontSize: 12,
     fontWeight: "500",
     color: "#616F7B",
-    marginBottom: 12,
+  },
+  suggestBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.splashBg,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  suggestBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.black,
+  },
+
+  // AI Suggestions Modal
+  suggestModalContent: {
+    maxHeight: "85%",
+  },
+  suggestScrollBody: {
+    paddingBottom: 8,
+  },
+  suggestHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  suggestTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  suggestTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  suggestHint: {
+    fontSize: 13,
+    color: "#777",
+    marginBottom: 16,
+  },
+  lengthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  lengthLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.black,
+  },
+  lengthChips: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  lengthChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: "#f2f2f2",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  lengthChipActive: {
+    backgroundColor: Colors.black,
+    borderColor: Colors.black,
+  },
+  lengthChipText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#555",
+  },
+  lengthChipTextActive: {
+    color: "#fff",
+  },
+  suggestLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 40,
+  },
+  suggestLoadingText: {
+    fontSize: 14,
+    color: "#666",
+  },
+  suggestionItem: {
+    backgroundColor: "#f7f7f7",
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: "#333",
+    lineHeight: 20,
+  },
+  suggestionEditHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+  },
+  suggestionEditHintText: {
+    fontSize: 11,
+    color: "#888",
+    fontWeight: "500",
+  },
+  suggestEditInput: {
+    minHeight: 120,
+    maxHeight: 220,
+    backgroundColor: "#f7f7f7",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 21,
+  },
+  suggestEditCounter: {
+    textAlign: "right",
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#616F7B",
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  useSuggestionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.black,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  useSuggestionText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  regenerateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  regenerateText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.black,
   },
 
   row: {
